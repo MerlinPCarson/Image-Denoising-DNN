@@ -53,6 +53,8 @@ def main():
     # input shape for each example to network, NOTE: channels first
     num_channels, patch_height, patch_width = train_data.shape()
 
+    print(f'Input shape to model forward will be: ({args.batch_size}, {num_channels}, {patch_height}, {patch_width})')
+
     return 0
 
 if __name__ == '__main__':
