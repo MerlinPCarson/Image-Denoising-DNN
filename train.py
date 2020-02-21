@@ -19,9 +19,14 @@ class Dataset(torch.utils.data.Dataset):
     
     def __getitem__(self, index):
         with h5py.File(self.file_name, 'r') as data:
-            example = np.array(self.keys[index])
+            example = np.array(data[self.keys[index]])
         return torch.Tensor(example)
 
+    def shape(self):
+        with h5py.File(self.file_name, 'r') as data:
+            return np.array(data[self.keys[0]]).shape
+
+        
 
 def main():
 
@@ -34,8 +39,8 @@ def main():
     assert os.path.exists(args.train_set), f'Cannot find training vectors file {args.train_set}'
     assert os.path.exists(args.val_set), f'Cannot find validation vectors file {args.train_set}'
 
-    print('Loading datasets')
 
+    print('Loading datasets')
 
     train_data = Dataset(args.train_set)
     val_data = Dataset(args.val_set)
@@ -44,6 +49,9 @@ def main():
     print(f'Number of validation examples: {len(val_data)}')
 
     train_loader = DataLoader(dataset=train_data, num_workers=os.cpu_count(), batch_size=args.batch_size, shuffle=True)
+
+    # input shape for each example to network, NOTE: channels first
+    num_channels, patch_height, patch_width = train_data.shape()
 
     return 0
 
