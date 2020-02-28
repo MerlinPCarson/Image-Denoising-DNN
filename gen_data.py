@@ -5,6 +5,7 @@ import argparse
 import cv2 as cv
 import h5py
 from glob import glob
+from tqdm import tqdm
 
 #import matplotlib.pyplot as plt
 
@@ -31,19 +32,20 @@ def image_augment(img, num_augs):
     return data_aug
 
 
-def generate_data(train_path, valid_path, patch_size, stride, scaling_factors, num_augments):
-    print(f'[Data Generation] Creating training data from {train_path}')
+def generate_data(train_path, val_path, patch_size, stride, scaling_factors, num_augments, num_channels):
+    #num_channels = 3
+    print(f'[Data Generation] Creating training data from {train_path} with {num_channels} channels')
     num_train = 0
     h5f = h5py.File('train.h5', 'w')
     num_train = 0
-    for f in sorted(glob(os.path.join(train_path, '*.png'))):
-        print(f'Preprocessing {f}')
+    for f in tqdm(sorted(glob(os.path.join(train_path, '*.png')))):
+        #print(f'{num_train+1}: Preprocessing {f}')
         img = cv.imread(f)
         height, width, ch = img.shape
 
         for scale in scaling_factors:
             img_scaled = cv.resize(img, (int(height*scale), int(width*scale)), interpolation=cv.INTER_CUBIC)
-            img_scaled = np.array(img_scaled[:,:,0].reshape((img_scaled.shape[0],img_scaled.shape[1],1))/255)
+            img_scaled = np.array(img_scaled[:,:,:num_channels].reshape((img_scaled.shape[0],img_scaled.shape[1],num_channels))/255)
             patches = get_image_patches(img_scaled, patch_size, stride)
             #print(f'  scaling: {scale}, num patches: {patches.shape[0]}')
             for patch_num in range(patches.shape[0]):
@@ -54,23 +56,24 @@ def generate_data(train_path, valid_path, patch_size, stride, scaling_factors, n
 
     h5f.close()
 
-    print(f'[Data Generation] Creating validation data from {valid_path}')
-    num_valid = 0
+    print(f'[Data Generation] Creating validation data from {val_path}')
+    num_val = 0
     h5f = h5py.File('val.h5', 'w')
-    for f in sorted(glob(os.path.join(valid_path, '*.png'))):
-        print(f'Preprocessing {f}')
+    for f in tqdm(sorted(glob(os.path.join(val_path, '*.png')))):
+        #print(f'Preprocessing {f}')
         img = cv.imread(f)
-        # channels first
-        img = np.array(img[:,:,0].reshape((1,img.shape[0],img.shape[1]))/255, dtype=np.float32)
-        h5f.create_dataset(str(num_valid), data=img)
-        num_valid += 1
+        img = np.array(img[:,:,:num_channels].reshape((img.shape[0],img.shape[1],num_channels))/255)
+        patches = get_image_patches(img, patch_size, stride)
+        for patch_num in range(patches.shape[0]):
+            # channels first
+            patch = np.einsum('ijk->kij', patches[patch_num].astype(np.float32)) 
+            h5f.create_dataset(str(num_val), data=patch)
+            num_val += 1
     h5f.close()
         
     print(f'Number of training examples {num_train}')    
-    print(f'Number of validation examples {num_valid}')    
+    print(f'Number of validation examples {num_val}')    
 
-
-    pass
 
 def get_image_patches(img, patch_size, stride):
     win_row_end = img.shape[0] - patch_size
@@ -99,27 +102,28 @@ def main():
     
     parser = argparse.ArgumentParser(description="DnCNN-data generation")
     parser.add_argument("--train_path", type=str, default='data/train', help='root directory for training data')
-    parser.add_argument("--valid_path", type=str, default='data/Set12', help='root directory for validation data')
-    parser.add_argument("--patch_size", type=int, default=40, help="image patch size to train on")
+    parser.add_argument("--val_path", type=str, default='data/Set12', help='root directory for validation data')
+    parser.add_argument("--patch_size", type=int, default=50, help="image patch size to train on")
     parser.add_argument("--stride", type=int, default=10, help="image patch stride")
-    parser.add_argument("--scaling_factors", type=str, default='1,.9,.8,.7', help="image scaling")
+    parser.add_argument("--scaling_factors", type=str, default='1,.6,.4,.2', help="image scaling")
     parser.add_argument("--num_augments", type=int, default=0, help="number of data augmentations per patch")
+    parser.add_argument("--num_channels", type=int, default=1, help="number of channels (bw=1, color=3)")
     args = parser.parse_args()
 
     train_path = os.path.join(script_dir, args.train_path)
-    valid_path = os.path.join(script_dir, args.valid_path)
+    val_path = os.path.join(script_dir, args.val_path)
     patch_size = args.patch_size
     stride = args.stride
     scaling_factors = [float(scale) for scale in args.scaling_factors.split(',')] 
     num_augments = args.num_augments
 
     print(f'[args] training data: {train_path}')
-    print(f'[args] validation data: {valid_path}')
+    print(f'[args] validation data: {val_path}')
     print(f'[args] patch size: {patch_size}, stride: {stride}')
     print(f'[args] scaling factors: {scaling_factors}')
     print(f'[args] number of augmentations: {num_augments}')
 
-    generate_data(train_path, valid_path, patch_size, stride, scaling_factors, num_augments)
+    generate_data(train_path, val_path, patch_size, stride, scaling_factors, num_augments, args.num_channels)
 
     return 0
 

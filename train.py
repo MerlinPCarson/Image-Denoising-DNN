@@ -48,7 +48,8 @@ def main():
     print(f'Number of training examples: {len(train_data)}')
     print(f'Number of validation examples: {len(val_data)}')
 
-    train_loader = DataLoader(dataset=train_data, num_workers=os.cpu_count(), batch_size=args.batch_size, shuffle=True)
+    train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, shuffle=True)
+    train_loader = DataLoader(dataset=val_data, batch_size=args.batch_size, shuffle=False)
 
     # input shape for each example to network, NOTE: channels first
     num_channels, patch_height, patch_width = train_data.shape()
