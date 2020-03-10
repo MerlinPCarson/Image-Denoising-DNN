@@ -49,6 +49,28 @@ def setup_gpus():
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, device_ids))
     return device_ids
 
+def gen_noise(batch_size, noise_type):
+    noise = torch.zeros(batch_size)
+    if noise_type == 'normal':
+        noise_levels = np.linspace(0,55/255, batch_size[0])
+        for i, nl in enumerate(noise_levels):
+            noise[i,:,:,:] = torch.FloatTensor(noise[0,:,:,:].shape).normal_(mean=0, std=nl)
+
+    elif noise_type == 'uniform':
+        noise_levels = np.linspace(0,0.25, batch_size[0])
+        for i, nl in enumerate(noise_levels):
+            noise_mask = torch.FloatTensor(np.random.uniform(size=noise[0].shape) < nl )
+            noise[i,:,:,:] = torch.FloatTensor(noise[0,:,:,:].shape).uniform_(0.0,1.0) * noise_mask
+
+    elif noise_type == 'pepper':
+        noise_levels = np.linspace(0,0.25, batch_size[0])
+        for i, nl in enumerate(noise_levels):
+            noise_pepper = np.random.uniform(0.0,1.0, size=noise[0,0].shape)
+            _, noise_pepper = cv.threshold(noise_pepper, (1-nl), -1.0, cv.THRESH_BINARY)
+            noise[i,:,:,:] = torch.FloatTensor(noise_pepper)
+
+    return noise
+
 train_set = 'train.h5'
 val_set = 'val.h5'
 batch_size = 128
@@ -56,6 +78,7 @@ batch_size = 128
 assert os.path.exists(train_set), f'Cannot find training vectors file {train_set}'
 assert os.path.exists(val_set), f'Cannot find validation vectors file {val_set}'
 
+os.makedirs('logs', exist_ok=True)
 print('Loading datasets')
 
 train_data = Dataset(train_set)
@@ -69,8 +92,8 @@ val_loader = DataLoader(dataset=val_data, num_workers=os.cpu_count(), batch_size
 
 RESUME_TRAINING = False
 
-DEPTH = 17
-INPUT_CHANNELS = 1
+DEPTH = 18 
+INPUT_CHANNELS = 3
 OUTPUT_CHANNELS = 64
 FILTER_SIZE = 3
 
@@ -81,7 +104,8 @@ MOMENTUM = 0.9
 END_LR = 0.00001
 START_LR = 0.01
 LR_EPOCHS = 50
-GAMMA = np.log(END_LR / START_LR) / (-LR_EPOCHS)
+#GAMMA = np.log(END_LR / START_LR) / (-LR_EPOCHS)
+GAMMA = 0.94 
 
 NUM_ITERATIONS = 50
 
@@ -120,23 +144,29 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
     model.train()
 
     for batch in tqdm(train_loader):
-        model.zero_grad()
         optimizer.zero_grad()
 
-        noise_25 = torch.FloatTensor(batch.size()).normal_(mean=0, std=25/255)
-        batch = batch + noise_25
+        # DnCNN-S
+        #noise = torch.FloatTensor(batch.size()).normal_(mean=0, std=25/255)
 
-        batch = Variable(batch.cuda())
-        noise_25 =  Variable(noise_25.cuda())
+        # DnCNN-B
+        noise = gen_noise(batch.size(), 'normal')
 
-        predict = model(batch)
-        batch_loss = loss(noise_25, predict) / batch.size()[0]
+        noisy_image = batch + noise
+        noisy_image = Variable(noisy_image.cuda())
+        noise =  Variable(noise.cuda())
+
+        predict = model(noisy_image)
+
+        batch_loss = loss(noise, predict) / batch.size()[0]
         batch_loss.backward()
         optimizer.step()
-        epoch_loss += batch_loss.item()
+
+        epoch_loss += batch_loss.detach()
         num_steps += 1
 
-    epoch_losses.append(epoch_loss/num_steps)
+    epoch_loss /= num_steps
+    epoch_losses.append(epoch_loss)
 
     epoch_val_loss = 0
     epoch_psnr = 0
@@ -144,31 +174,32 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
     model.eval()
 
     for batch in tqdm(val_loader):
-        noise_25 = torch.FloatTensor(batch.size()).normal_(mean=0, std=25/255)
-        noisy_image = batch + noise_25
 
+        # DnCNN-S
+        #noise = torch.FloatTensor(batch.size()).normal_(mean=0, std=25/255)
+
+        # DnCNN-B
+        noise = gen_noise(batch.size(), 'normal')
+
+        noisy_image = batch + noise
         noisy_image = Variable(noisy_image.cuda())
-        noise_25 =  Variable(noise_25.cuda())
+        noise =  Variable(noise.cuda())
 
         predict = model(noisy_image)
-        val_loss = loss(noise_25, predict) / batch.size()[0]
-        epoch_val_loss += val_loss.item()
+        val_loss = loss(noise, predict) / batch.size()[0]
+        epoch_val_loss += val_loss.detach()
         num_steps += 1
-
-        if val_loss < min_val_loss:
-            min_val_loss = val_loss
-            torch.save(model.state_dict, f'logs/t_star.state')
 
         # Calculate PSNR
         denoised_image = torch.clamp(noisy_image - predict, 0.0, 1.0)
         epoch_psnr += batch_psnr(batch, denoised_image)
 
-    scheduler.step()
-    
-    epoch_val_losses.append(epoch_val_loss/num_steps)
-    epoch_psnrs.append(epoch_psnr/num_steps)
+    epoch_val_loss /= num_steps
+    epoch_psnr /= num_steps
 
-    torch.save({
+    if val_loss < min_val_loss:
+        min_val_loss = val_loss
+        torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
@@ -176,6 +207,22 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
             'epoch_train_losses': epoch_losses,
             'epoch_val_losses': epoch_val_losses,
             'epoch_psnr': epoch_psnr,
-            }, 'logs/model.state')
+            }, 'logs/t_star.state')
 
-    print(f'Epoch {epoch} train loss = {epoch_loss/num_steps}, val loss = {epoch_val_loss/num_steps}, PSNR = {epoch_psnr/num_steps}')
+    scheduler.step()
+    
+    epoch_val_losses.append(epoch_val_loss)
+    epoch_psnrs.append(epoch_psnr)
+
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+        'epoch_train_losses': epoch_losses,
+        'epoch_val_losses': epoch_val_losses,
+        'epoch_psnr': epoch_psnr,
+        }, 'logs/model.state')
+
+    print(f'Epoch {epoch+1} train loss = {epoch_loss}, val loss = {epoch_val_loss}, PSNR = {epoch_psnr}')
+
