@@ -17,6 +17,7 @@ class Dataset(torch.utils.data.Dataset):
         self.file_name = file_name
         with h5py.File(file_name, 'r') as data:
             self.keys = list(data.keys())
+        np.random.shuffle(self.keys)
 
     def __len__(self):
         return len(self.keys)
@@ -105,7 +106,7 @@ END_LR = 0.00001
 START_LR = 0.01
 LR_EPOCHS = 50
 #GAMMA = np.log(END_LR / START_LR) / (-LR_EPOCHS)
-GAMMA = 0.94 
+GAMMA = 0.87 
 
 NUM_ITERATIONS = 50
 
@@ -159,10 +160,11 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
         predict = model(noisy_image)
 
         batch_loss = loss(noise, predict) / batch.size()[0]
+        epoch_loss += batch_loss.detach()
+
         batch_loss.backward()
         optimizer.step()
 
-        epoch_loss += batch_loss.detach()
         num_steps += 1
 
     epoch_loss /= num_steps
@@ -172,32 +174,33 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
     epoch_psnr = 0
     num_steps = 0
     model.eval()
-
-    for batch in tqdm(val_loader):
-
-        # DnCNN-S
-        #noise = torch.FloatTensor(batch.size()).normal_(mean=0, std=25/255)
-
-        # DnCNN-B
-        noise = gen_noise(batch.size(), 'normal')
-
-        noisy_image = batch + noise
-        noisy_image = Variable(noisy_image.cuda())
-        noise =  Variable(noise.cuda())
-
-        predict = model(noisy_image)
-        val_loss = loss(noise, predict) / batch.size()[0]
-        epoch_val_loss += val_loss.detach()
-        num_steps += 1
-
-        # Calculate PSNR
-        denoised_image = torch.clamp(noisy_image - predict, 0.0, 1.0)
-        epoch_psnr += batch_psnr(batch, denoised_image)
+    with torch.no_grad():
+        for batch in tqdm(val_loader):
+    
+            # DnCNN-S
+            #noise = torch.FloatTensor(batch.size()).normal_(mean=0, std=25/255)
+    
+            # DnCNN-B
+            noise = gen_noise(batch.size(), 'normal')
+    
+            noisy_image = batch + noise
+            noisy_image = Variable(noisy_image.cuda())
+            noise =  Variable(noise.cuda())
+    
+            predict = model(noisy_image)
+            val_loss = loss(noise, predict) / batch.size()[0]
+            epoch_val_loss += val_loss.detach()
+            num_steps += 1
+    
+            # Calculate PSNR
+            denoised_image = torch.clamp(noisy_image - predict, 0.0, 1.0)
+            epoch_psnr += batch_psnr(batch, denoised_image)
 
     epoch_val_loss /= num_steps
     epoch_psnr /= num_steps
 
     if val_loss < min_val_loss:
+        print('Saving best model')
         min_val_loss = val_loss
         torch.save({
             'epoch': epoch,
