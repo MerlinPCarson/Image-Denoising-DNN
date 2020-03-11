@@ -126,7 +126,7 @@ scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=GAMMA)
 epochs_trained = 0
 
 if RESUME_TRAINING:
-    checkpoint = torch.load('/logs/model.state')
+    checkpoint = torch.load('logs/model.state')
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
