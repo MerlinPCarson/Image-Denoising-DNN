@@ -312,7 +312,7 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch_train_losses': epoch_losses,
                 'epoch_val_losses': epoch_val_losses,
-                'epoch_psnr': epoch_psnr,
+                'epoch_psnrs': epoch_psnrs,
                 }, 'logs/t_star.state')
 
 
@@ -328,7 +328,7 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
             'optimizer_state_dict': optimizer.state_dict(),
             'epoch_train_losses': epoch_losses,
             'epoch_val_losses': epoch_val_losses,
-            'epoch_psnr': epoch_psnr,
+            'epoch_psnrs': epoch_psnrs,
             }, 'logs/model.state')
 
     print(f'Epoch {epoch} train loss = {epoch_loss}, val loss = {epoch_val_loss}, psnr = {epoch_psnr}')

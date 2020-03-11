@@ -84,12 +84,12 @@ def main():
           denoised_img = denoised_img.cpu().data.numpy().astype(np.float32)[0,:,:,:]
           denoised_img *= 255     # undo normalization
           denoised_img = np.einsum('ijk->jki', denoised_img)
-          cv.imwrite(img=denoised_img.clip(0.0, 255.0).astype('uint8'), filename=os.path.join(out_dir, file_name.replace('.png', f'-{nl*255}-denoised.png')))
+          cv.imwrite(img=denoised_img.clip(0.0, 255.0).astype('uint8'), filename=os.path.join(out_dir, file_name.replace('.png', f'-{nl}-denoised.png')))
 
           noisy_img = noisy_img.cpu().data.numpy().astype(np.float32)[0,:,:,:]
           noisy_img *= 255        # undo normalization
           noisy_img = np.einsum('ijk->jki', noisy_img) 
-          cv.imwrite(img=noisy_img.clip(0.0, 255.0).astype('uint8'), filename=os.path.join(out_dir, file_name.replace('.png', f'-{nl*255}-noisy.png')))
+          cv.imwrite(img=noisy_img.clip(0.0, 255.0).astype('uint8'), filename=os.path.join(out_dir, file_name.replace('.png', f'-{nl}-noisy.png')))
 
           psnr_pre = psnr(img, noisy_img, data_range=255)
           psnr_post = psnr(img, denoised_img, data_range=255)
