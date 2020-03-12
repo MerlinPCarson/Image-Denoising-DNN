@@ -101,13 +101,13 @@ def main():
     script_dir = os.path.dirname(os.path.realpath(__file__))
     
     parser = argparse.ArgumentParser(description="DnCNN-data generation")
-    parser.add_argument("--train_path", type=str, default='data/train', help='root directory for training data')
-    parser.add_argument("--val_path", type=str, default='data/Set12', help='root directory for validation data')
+    parser.add_argument("--train_path", type=str, default='data/train_color/train', help='root directory for training data')
+    parser.add_argument("--val_path", type=str, default='data/train_color/val', help='root directory for validation data')
     parser.add_argument("--patch_size", type=int, default=50, help="image patch size to train on")
     parser.add_argument("--stride", type=int, default=10, help="image patch stride")
     parser.add_argument("--scaling_factors", type=str, default='1,.6,.4,.2', help="image scaling")
     parser.add_argument("--num_augments", type=int, default=0, help="number of data augmentations per patch")
-    parser.add_argument("--num_channels", type=int, default=1, help="number of channels (bw=1, color=3)")
+    parser.add_argument("--num_channels", type=int, default=3, help="number of channels (bw=1, color=3)")
     args = parser.parse_args()
 
     train_path = os.path.join(script_dir, args.train_path)
