@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 import math
 
 
@@ -30,6 +31,19 @@ class CNN_BN_ReLU(nn.Module):
     def forward(self, x):
         return self.layer(x)
 	
+class CNN_BN_ReLU_Res(nn.Module):
+    def __init__(self, in_channels, out_channels, filter_size):
+        super(CNN_BN_ReLU_Res, self).__init__()
+        padding = int((filter_size - 1) / 2)
+        self.layer = nn.Sequential(nn.Conv2d(in_channels, out_channels, filter_size, padding=padding, bias=False),\
+		                           nn.BatchNorm2d(in_channels),\
+		                           nn.ReLU(),\
+                                   nn.Conv2d(in_channels, out_channels, filter_size, padding=padding, bias=False),\
+		                           nn.BatchNorm2d(in_channels))
+		
+    def forward(self, x):
+        return nn.functional.relu(x + self.layer(x))
+	
 
 class CNN(nn.Module):
     def __init__(self, in_channels, out_channels, filter_size):
@@ -46,6 +60,17 @@ class DnCNN(nn.Module):
         self.layers = nn.Sequential(
         CNN_ReLU(input_channels, output_channels, filter_size),
         nn.Sequential(*[CNN_BN_ReLU(output_channels, output_channels, filter_size) for x in range(num_layers)]),
+        CNN(output_channels, input_channels, filter_size))
+		
+    def forward(self, x):
+        return self.layers(x)	
+
+class DnCNN_Res(nn.Module):
+    def __init__(self, num_layers, input_channels, output_channels, filter_size):
+        super(DnCNN_Res, self).__init__()
+        self.layers = nn.Sequential(
+        CNN_ReLU(input_channels, output_channels, filter_size),
+        nn.Sequential(*[CNN_BN_ReLU_Res(output_channels, output_channels, filter_size) for x in range(num_layers)]),
         CNN(output_channels, input_channels, filter_size))
 		
     def forward(self, x):
