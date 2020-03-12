@@ -56,7 +56,7 @@ def generate_data(train_path, val_path, patch_size, stride, scaling_factors, num
 
     h5f.close()
 
-    print(f'[Data Generation] Creating validation data from {val_path}')
+    print(f'[Data Generation] Creating validation data from {val_path} with {num_channels} channels')
     num_val = 0
     h5f = h5py.File('val.h5', 'w')
     for f in tqdm(sorted(glob(os.path.join(val_path, '*.png')))):

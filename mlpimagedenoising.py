@@ -87,7 +87,7 @@ def setup_gpus():
 
 train_set = 'train.h5'
 val_set = 'val.h5'
-batch_size = 100
+batch_size = 128 
 
 assert os.path.exists(train_set), f'Cannot find training vectors file {train_set}'
 assert os.path.exists(val_set), f'Cannot find validation vectors file {val_set}'
@@ -117,7 +117,7 @@ val_loader = DataLoader(dataset=val_data, num_workers=os.cpu_count(), batch_size
   #print(noise_25.shape)
   #print(noise_25_flat.shape)'''
 
-RESUME_TRAINING = False
+RESUME_TRAINING = True 
 
 DEPTH = 17
 INPUT_CHANNELS = 1
@@ -133,7 +133,7 @@ START_LR = 0.01
 LR_EPOCHS = 50
 #GAMMA = np.log(END_LR / START_LR) / (-LR_EPOCHS)
 GAMMA = 0.94
-NUM_ITERATIONS = 50
+NUM_ITERATIONS = 100
 
 # detect gpus and setup environment variables
 device_ids = setup_gpus()
@@ -210,23 +210,26 @@ print(model)
 print('Number of trainable params: ',sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 loss = nn.MSELoss().cuda()
-optimizer = torch.optim.Adam(model.parameters(), lr=START_LR)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=GAMMA)
 
 epochs_trained = 0
 
-if RESUME_TRAINING:
-    checkpoint = torch.load('/logs/model.state')
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    epochs_trained = checkpoint['epoch']
-
 epoch_losses = []
 epoch_val_losses = []
 epoch_psnrs = []
 min_val_loss = 1000
+
+if RESUME_TRAINING:
+    checkpoint = torch.load('logs/model.state')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch_losses = list(checkpoint['epoch_train_losses'])
+    epoch_val_loss = list(checkpoint['epoch_val_losses'])
+    epoch_psnrs = [checkpoint['epoch_psnr']]
+    epochs_trained = checkpoint['epoch']
+
 
 #print(model)
 for epoch in range(NUM_ITERATIONS - epochs_trained):
@@ -312,7 +315,7 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch_train_losses': epoch_losses,
                 'epoch_val_losses': epoch_val_losses,
-                'epoch_psnr': epoch_psnr,
+                'epoch_psnrs': epoch_psnr,
                 }, 'logs/t_star.state')
 
 
@@ -328,7 +331,7 @@ for epoch in range(NUM_ITERATIONS - epochs_trained):
             'optimizer_state_dict': optimizer.state_dict(),
             'epoch_train_losses': epoch_losses,
             'epoch_val_losses': epoch_val_losses,
-            'epoch_psnr': epoch_psnr,
+            'epoch_psnrs': epoch_psnr,
             }, 'logs/model.state')
 
     print(f'Epoch {epoch} train loss = {epoch_loss}, val loss = {epoch_val_loss}, psnr = {epoch_psnr}')
