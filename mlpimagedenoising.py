@@ -164,9 +164,10 @@ learning_rate = 0.1
 
 #Implementing for the small data set, number of hidden layers = 2
 patch_size = 17
-num_input = patch_size*patch_size #Vector of 
+num_channels = 1
+num_input = num_channels * patch_size*patch_size #Vector of 
 num_hidden = 2047 #number of neurons on hidden layer = 511
-num_output= patch_size*patch_size
+num_output= num_channels * patch_size*patch_size
 
 def init_weights(layer):
     if isinstance(layer, nn.Linear):

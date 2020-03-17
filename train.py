@@ -8,13 +8,13 @@ import os
 from tqdm import tqdm
 from skimage.metrics import peak_signal_noise_ratio as psnr
 import matplotlib.pyplot as plt
-from DnCNN import DnCNN
+from DnCNN import DnCNN, DnCNN_Res
 from DnCNN import init_weights
 
 
-RESUME_TRAINING = False
+RESUME_TRAINING = False 
 
-DEPTH = 18 
+DEPTH = 40 
 INPUT_CHANNELS = 3
 OUTPUT_CHANNELS = 64
 FILTER_SIZE = 3
@@ -24,11 +24,11 @@ WEIGHT_DECAY = 0.00001
 MOMENTUM = 0.9
 
 END_LR = 0.00001
-START_LR = 0.01
+START_LR = 0.001
 LR_EPOCHS = 50
 GAMMA = 0.87 
 
-NUM_ITERATIONS = 50
+NUM_ITERATIONS = 50 
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -96,7 +96,7 @@ def gen_noise(batch_size, noise_type):
 def main():
     train_set = 'train.h5'
     val_set = 'val.h5'
-    batch_size = 128
+    batch_size = 128 
     
     assert os.path.exists(train_set), f'Cannot find training vectors file {train_set}'
     assert os.path.exists(val_set), f'Cannot find validation vectors file {val_set}'
@@ -110,16 +110,18 @@ def main():
     print(f'Number of training examples: {len(train_data)}')
     print(f'Number of validation examples: {len(val_data)}')
     
-    train_loader = DataLoader(dataset=train_data, num_workers=os.cpu_count(), batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(dataset=val_data, num_workers=os.cpu_count(), batch_size=batch_size, shuffle=False)              
-
     # detect gpus and setup environment variables
     device_ids = setup_gpus()
     print(f'Cuda devices found: {[torch.cuda.get_device_name(i) for i in device_ids]}')
     
-    model = DnCNN(DEPTH, INPUT_CHANNELS, OUTPUT_CHANNELS, FILTER_SIZE)
+    train_loader = DataLoader(dataset=train_data, num_workers=os.cpu_count(), batch_size=batch_size*len(device_ids), shuffle=True)
+    val_loader = DataLoader(dataset=val_data, num_workers=os.cpu_count(), batch_size=batch_size*len(device_ids), shuffle=False)              
+
+    model = DnCNN_Res(DEPTH, INPUT_CHANNELS, OUTPUT_CHANNELS, FILTER_SIZE)
     model.apply(init_weights)
     model = torch.nn.DataParallel(model, device_ids=device_ids).cuda()
+
+    print(f'Number of trainable parameters {sum(p.numel() for p in model.parameters() if p.requires_grad)}')
     
     loss = nn.MSELoss().cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
@@ -128,17 +130,21 @@ def main():
     
     epochs_trained = 0
     
-    if RESUME_TRAINING:
-        print('Loading checkpoint model to resume training')
-        checkpoint = torch.load('logs/t_star.state')
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        epochs_trained = checkpoint['epoch']
-    
     epoch_losses = []
     epoch_val_losses = []
     epoch_psnrs = []
+
+    if RESUME_TRAINING:
+        print('Loading checkpoint model to resume training')
+        checkpoint = torch.load('logs/t_star.state')
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        model.load_state_dict(checkpoint['model_state_dict'])
+        epoch_losses = list(checkpoint['epoch_train_losses'])
+        epoch_val_losses = list(checkpoint['epoch_val_losses'])
+        epoch_psnrs = list(checkpoint['epoch_psnrs'])
+        epochs_trained = checkpoint['epoch']
+    
     min_val_loss = 1000
     
     print(model)
@@ -211,7 +217,7 @@ def main():
     
         if epoch_val_loss < min_val_loss:
             print('Saving best model')
-            min_val_loss = val_loss
+            min_val_loss = epoch_val_loss
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
