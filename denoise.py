@@ -10,6 +10,7 @@ from train import setup_gpus
 import torch
 from torch.autograd import Variable
 from skimage.metrics import peak_signal_noise_ratio as psnr
+import time
 
 from DnCNN import DnCNN
 from DnCNN import init_weights
@@ -60,6 +61,8 @@ def main():
     # make sure output directory exists
     os.makedirs(out_dir, exist_ok=True)
 
+    timings = []
+
     for nl in noise_levels:
       test_psnr = 0
       psnr_improvement = 0
@@ -77,7 +80,9 @@ def main():
           noisy_img = Variable((clean_img + noise).cuda())
 
           with torch.no_grad():
+              start = time.time()
               denoised_img = torch.clamp(noisy_img - model(noisy_img), 0.0, 1.0)
+              timings.append(time.time()-start)
               
           # save images
           file_name = os.path.basename(f)
@@ -103,6 +108,7 @@ def main():
       print(f'Average PSNR of testset at noise level {nl} is {test_psnr/num_test_files}')
       print(f'Average increase in PSNR of testset at noise level {nl} is {psnr_improvement/num_test_files}')
 
+      print(f'Average processing time is {sum(timings)/len(timings)}')
     return 0
 
 if __name__ == '__main__':
